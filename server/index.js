@@ -1,5 +1,8 @@
 import express from "express";
 import cors from "cors";
+import { secp256k1 } from "ethereum-cryptography/secp256k1";
+import { keccak256 } from "ethereum-cryptography/keccak";
+import { utf8ToBytes } from "ethereum-cryptography/utils";
 
 const app = express();
 const port = 3042;
@@ -20,12 +23,20 @@ app.get("/balance/:address", (req, res) => {
 });
 
 app.post("/send", (req, res) => {
-  const { sender, recipient, amount } = req.body;
+  const { sender, recipient, amount, message, signature } = req.body;
+  const sig = {
+    r: BigInt(signature.r),
+    s: BigInt(signature.s),
+    recovery: signature.recovery,
+  };
+  const hashMessage = keccak256(utf8ToBytes(message));
 
   setInitialBalance(sender);
   setInitialBalance(recipient);
 
-  if (balances[sender] < amount) {
+  if (!secp256k1.verify(sig, hashMessage, sender)) {
+    res.status(400).send({ message: "Fail to verify signature!" });
+  } else if (balances[sender] < amount) {
     res.status(400).send({ message: "Not enough funds!" });
   } else {
     balances[sender] -= amount;
